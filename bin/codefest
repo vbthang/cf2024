@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+
+const yargs = require('yargs');
+
+const codefest = require('../src/index');
+
+const { argv } = yargs
+  .usage('Usage: codefest -a <api server> -g <game id> -p <player id>')
+  .env(true)
+  .option('api-server', {
+    alias: 'a',
+    describe: 'API Server Url',
+    type: 'string',
+    default: 'http://localhost',
+  })
+  .option('game-id', {
+    alias: 'g',
+    describe: 'Game ID',
+    type: 'string',
+  })
+  .option('player-id', {
+    alias: 'p',
+    describe: 'Player ID',
+    type: 'string',
+  })
+  .option('mode', {
+    alias: 'm',
+    describe: 'Game mode',
+    type: 'string',
+    default: 'compat',
+  })
+  .demandOption(['game-id', 'player-id'])
+  .help('help', 'Show this help and exit')
+  .version(require('../package').version);
+
+codefest({
+  apiServer: argv.apiServer,
+  playerId: argv.playerId,
+  gameId: argv.gameId,
+  mode: argv.mode,
+});
