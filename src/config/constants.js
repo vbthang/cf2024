@@ -49,6 +49,7 @@ module.exports = {
     PLAYER_PICK_SPOIL: 'player:pick-spoil',
     PLAYER_STUN_BY_WEAPON: 'player:stun-by-weapon',
     PLAYER_STUN_TIMEOUT: 'player:stun-timeout',
+    PLAYER_TRANSFORMED: 'player:transformed',
 
     PLAYER_INTO_WEDDING_ROOM: 'player:into-wedding-room',
     PLAYER_OUTTO_WEDDING_ROOM: 'player:outto-wedding-room',
@@ -63,5 +64,15 @@ module.exports = {
     WOODEN_PESTLE_SETUP: 'Wooden_pestle:setup',
     HAMMER_EXPLODED: 'hammer:exploded',
     WIND_EXPLODED: 'wind:exploded',
+  },
+  META_DATA: {
+    DELAY_SETUP_BOMB: 2000,
+    STUN: 3000,
+  },
+  DIRECTIONS: {
+    1: [-1, 0],
+    2: [1, 0],
+    3: [0, -1],
+    4: [0, 1],
   },
 };

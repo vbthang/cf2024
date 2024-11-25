@@ -1,5 +1,5 @@
 const io = require('socket.io-client');
-const { SOCKET_EVENT } = require('./config/constants');
+const { SOCKET_EVENT, CHARACTER } = require('./config/constants');
 const GameClient = require('./core/gameClient');
 
 module.exports = ({ apiServer, gameId, playerId, mode }) => {
@@ -37,19 +37,27 @@ module.exports = ({ apiServer, gameId, playerId, mode }) => {
     console.error('[Socket] error ⚠️⚠️⚠️ :', err);
   });
 
+  const gameClient = new GameClient(socket, playerId);
+  const type = CHARACTER.MOUNTAIN_GOD;
+
   socket.on(SOCKET_EVENT.JOIN_GAME, (res) => {
     console.log('[Socket] join-game responsed', res);
-  });
 
-  const gameClient = new GameClient(socket, playerId);
+    // Register character power
+    // If not emit, random character will be selected
+    socket.emit(SOCKET_EVENT.REGISTER_CHARACTER_POWER, {
+      gameId,
+      type,
+    });
+  });
 
   socket.on(SOCKET_EVENT.TICTACK_PLAYER, async (res) => {
     // console.log('🎮 Ticktack player:');
     gameClient.onTicktack(res);
   });
 
-  socket.on(SOCKET_EVENT.DRIVE_PLAYER, async (res) => {
-    // console.log('🚗 Drive player:');
-    gameClient.onDrivePlayer(res);
-  });
+  // socket.on(SOCKET_EVENT.DRIVE_PLAYER, async (res) => {
+  //   // console.log('🚗 Drive player:');
+  //   gameClient.onDrivePlayer(res);
+  // });
 };
