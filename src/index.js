@@ -51,7 +51,7 @@ module.exports = ({ apiServer, gameId, playerId, mode }) => {
     });
   });
 
-  socket.on(SOCKET_EVENT.TICTACK_PLAYER, async (res) => {
+  socket.on(SOCKET_EVENT.TICTACK_PLAYER, (res) => {
     // console.log('🎮 Ticktack player:');
     gameClient.onTicktack(res);
   });

@@ -9,4 +9,4 @@ class GameAnalyzer {
   }
 }
 
-module.exports = GameAnalyzer;
+module.exports = GameAnalyzer.getInstance();

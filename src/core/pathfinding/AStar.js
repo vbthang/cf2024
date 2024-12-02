@@ -21,7 +21,7 @@ const DIRECTIONS = {
 
 const COSTS = {
   move: 1,
-  breakWall: 3,
+  breakWall: 4,
 };
 
 function findTargets(map, target) {
@@ -39,12 +39,15 @@ function findTargets(map, target) {
 function findPositionSetBomb(map, target, start, radius = 1) {
   const { x: startX, y: startY } = start;
 
+  console.log('Target:', target);
+
   let bestPosition = null;
   let maxTargets = 0;
   let minDistance = Infinity;
 
   // Fix: Magic number 20 ???
   while (radius <= 20) {
+    console.log(radius);
     for (let y = startY - radius; y <= startY + radius; y++) {
       for (let x = startX - radius; x <= startX + radius; x++) {
         if (
@@ -66,13 +69,15 @@ function findPositionSetBomb(map, target, start, radius = 1) {
         }
 
         const distance = Math.abs(startX - x) + Math.abs(startY - y);
-        if (
-          affectedTargets > maxTargets ||
-          (affectedTargets === maxTargets && distance < minDistance)
-        ) {
-          maxTargets = affectedTargets;
-          minDistance = distance;
-          bestPosition = [x, y];
+        if (affectedTargets > 0) {
+          if (
+            affectedTargets > maxTargets ||
+            (affectedTargets === maxTargets && distance < minDistance)
+          ) {
+            maxTargets = affectedTargets;
+            minDistance = distance;
+            bestPosition = [x, y];
+          }
         }
       }
     }
@@ -84,7 +89,60 @@ function findPositionSetBomb(map, target, start, radius = 1) {
     radius++;
   }
 
-  return null;
+  return [];
+}
+
+function findNearSafePosition(map, bombs, current) {
+  const { x: startX, y: startY } = current;
+
+  const checkBomb = (x, y) => {
+    for (let bomb of bombs) {
+      console.log('Vị trí kiểm tra:', [x, y]);
+      console.log('Vị trí bomb:', bomb);
+      let { row, col, power } = bomb;
+      if (x === row && y === col) return true;
+      if (x === row) {
+        if (y >= col - power || y <= col + power) {
+          console.log('Return True');
+          return true;
+        }
+      }
+      if (y === col) {
+        if (x >= row - power || x <= row + power) {
+          console.log('Return True');
+          return true;
+        }
+      }
+    }
+    console.log('Return False');
+    return false;
+  };
+
+  let radius = 1;
+  while (radius <= 10) {
+    console.log('------***------');
+    console.log('Tìm kiếm', radius, 'ô quanh tôi');
+    for (let y = startY - radius; y <= startY + radius; y++) {
+      for (let x = startX - radius; x <= startX + radius; x++) {
+        if (
+          map[y][x] === MAP.BALK ||
+          map[y][x] === MAP.BRICK_WALL ||
+          map[y][x] === MAP.STONE_WALL ||
+          map[y][x] === MAP.BOMB ||
+          checkBomb(x, y) ||
+          !isValidPosition(map, [x, y])
+        ) {
+          console.log('Không thể đứng ở:', [x, y]);
+          continue;
+        }
+        console.log('Vị trí an toàn để tránh bomb:', [x, y]);
+        return [[x, y]];
+      }
+    }
+    radius++;
+  }
+
+  return [[startX, startY]];
 }
 
 function manhattanDistance(pos1, pos2) {
@@ -237,6 +295,7 @@ function findShortestPath(map, start, targets) {
   // Thử tìm đường đi đến từng target
   for (const target of targets) {
     const result = findPathToTarget(map, [start.x, start.y], target);
+    console.log('result', result);
 
     if (result && result.cost < minTotalCost) {
       minTotalCost = result.cost;
@@ -251,4 +310,5 @@ module.exports = {
   findTargets,
   findPositionSetBomb,
   findShortestPath,
+  findNearSafePosition,
 };

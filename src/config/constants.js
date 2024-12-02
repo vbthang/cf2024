@@ -14,6 +14,9 @@ module.exports = {
     PRISON: 5,
     GOD_BAGDE: 6,
     SPEC_CELL: 7,
+
+    // Add
+    BOMB: 8,
   },
   ITEM: {
     STICKY_RICE: 32, // 1 score
@@ -22,6 +25,14 @@ module.exports = {
     NINE_SPUR_ROOTER: 35, // 3 score
     NINE_MANE_HAIR_HORSE: 36, // 4 score
     HOLY_SPIRIT_STONE: 37, // 3 score
+  },
+  ITEM_SCORE: {
+    32: 1,
+    33: 2,
+    34: 5,
+    35: 3,
+    36: 4,
+    37: 3,
   },
   CHARACTER: {
     MOUNTAIN_GOD: 1,

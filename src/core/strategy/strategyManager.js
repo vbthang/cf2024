@@ -18,6 +18,13 @@ class StrategyManager {
     }
     return StrategyManager.instance;
   }
+
+  static getInstance() {
+    if (!StrategyManager.instance) {
+      StrategyManager.instance = new StrategyManager();
+    }
+    return StrategyManager.instance;
+  }
 }
 
-module.exports = StrategyManager;
+module.exports = StrategyManager.getInstance();
