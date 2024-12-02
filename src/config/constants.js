@@ -86,4 +86,13 @@ module.exports = {
     3: [0, -1],
     4: [0, 1],
   },
+
+  // DEFINE FOR RUNTIME
+  PLAYER_STATUS: {
+    DO_NOTHING: 0,
+    SETUP_BOMB: 1,
+    RUN_AWAY: 2,
+    WAIT: 3,
+    TAKE_SPOIL: 4,
+  },
 };

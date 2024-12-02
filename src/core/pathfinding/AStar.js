@@ -21,7 +21,7 @@ const DIRECTIONS = {
 
 const COSTS = {
   move: 1,
-  breakWall: 4,
+  breakWall: 8,
 };
 
 function findTargets(map, target) {
@@ -38,8 +38,6 @@ function findTargets(map, target) {
 
 function findPositionSetBomb(map, target, start, radius = 1) {
   const { x: startX, y: startY } = start;
-
-  console.log('Target:', target);
 
   let bestPosition = null;
   let maxTargets = 0;
@@ -83,59 +81,80 @@ function findPositionSetBomb(map, target, start, radius = 1) {
     }
 
     if (bestPosition) {
-      return [bestPosition];
+      return bestPosition;
     }
 
     radius++;
   }
 
-  return [];
+  return null;
 }
 
-function findNearSafePosition(map, bombs, current) {
-  const { x: startX, y: startY } = current;
+const checkBomb = (x, y, bombs) => {
+  console.log('Kiểm tra bombs');
+  console.log('**************************');
 
-  const checkBomb = (x, y) => {
-    for (let bomb of bombs) {
-      console.log('Vị trí kiểm tra:', [x, y]);
-      console.log('Vị trí bomb:', bomb);
-      let { row, col, power } = bomb;
-      if (x === row && y === col) return true;
-      if (x === row) {
-        if (y >= col - power || y <= col + power) {
-          console.log('Return True');
-          return true;
-        }
-      }
-      if (y === col) {
-        if (x >= row - power || x <= row + power) {
-          console.log('Return True');
-          return true;
-        }
-      }
+  for (let bomb of bombs) {
+    let { row, col, power } = bomb;
+    console.log('Bomb:', bomb);
+    console.log(x, y);
+
+    if (x === row && y === col) {
+      console.log('Vị trí có bomb:', [x, y]);
+      return true;
     }
-    console.log('Return False');
-    return false;
-  };
 
+    if (
+      (y === row && Math.abs(x - col) <= power) ||
+      (x === col && Math.abs(y - row) <= power)
+    ) {
+      console.log('Vị trí có bomb:', [x, y]);
+      return true;
+    }
+  }
+
+  console.log('Không có bomb');
+  return false;
+};
+
+function findNearSafePosition(map, bombs, current) {
+  const [startX, startY] = current;
   let radius = 1;
+
   while (radius <= 10) {
-    console.log('------***------');
-    console.log('Tìm kiếm', radius, 'ô quanh tôi');
-    for (let y = startY - radius; y <= startY + radius; y++) {
-      for (let x = startX - radius; x <= startX + radius; x++) {
-        if (
-          map[y][x] === MAP.BALK ||
-          map[y][x] === MAP.BRICK_WALL ||
-          map[y][x] === MAP.STONE_WALL ||
-          map[y][x] === MAP.BOMB ||
-          checkBomb(x, y) ||
-          !isValidPosition(map, [x, y])
-        ) {
-          console.log('Không thể đứng ở:', [x, y]);
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        const x = startX + dx;
+        const y = startY + dy;
+
+        // Bỏ qua vị trí ngoài bản đồ
+        if (!isValidPosition(map, [x, y])) {
+          console.log('Vị trí ngoài bản đồ:', [x, y]);
           continue;
         }
-        console.log('Vị trí an toàn để tránh bomb:', [x, y]);
+
+        // Bỏ qua vị trí có vật cản hoặc bomb
+        if (map[y][x] === MAP.BALK) {
+          console.log('Vị trí bị chặn BALK:', [x, y]);
+          continue;
+        }
+        if (map[y][x] === MAP.BRICK_WALL) {
+          console.log('Vị trí bị chặn BRICK_WALL:', [x, y]);
+          continue;
+        }
+        if (map[y][x] === MAP.STONE_WALL) {
+          console.log('Vị trí bị chặn STONE_WALL:', [x, y]);
+          continue;
+        }
+
+        if (checkBomb(x, y, bombs)) {
+          console.log('Vị trí có bomb:', [x, y]);
+          continue;
+        }
+
+        console.log('Vị trí an toàn:', [x, y]);
+        console.log('Vị trí hiện tại:', [startX, startY]);
+
         return [[x, y]];
       }
     }
@@ -295,7 +314,14 @@ function findShortestPath(map, start, targets) {
   // Thử tìm đường đi đến từng target
   for (const target of targets) {
     const result = findPathToTarget(map, [start.x, start.y], target);
-    console.log('result', result);
+    console.log(
+      'Kết quả tìm đường từ',
+      [start.x, start.y],
+      'đến',
+      [target],
+      'là:',
+      result,
+    );
 
     if (result && result.cost < minTotalCost) {
       minTotalCost = result.cost;
@@ -311,4 +337,5 @@ module.exports = {
   findPositionSetBomb,
   findShortestPath,
   findNearSafePosition,
+  findPathToTarget,
 };

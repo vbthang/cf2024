@@ -7,14 +7,14 @@ const {
   DIRECTIONS,
   DRIVE,
   ITEM_SCORE,
+  PLAYER_STATUS,
 } = require('../config/constants');
-const strategyManager = require('./strategy/strategyManager');
-const gameAnalyzer = require('./analize/gameAnalyzer');
 const {
   findTargets,
   findShortestPath,
   findPositionSetBomb,
   findNearSafePosition,
+  findPathToTarget,
 } = require('./pathfinding/AStar');
 
 class GameClient {
@@ -28,7 +28,7 @@ class GameClient {
       mode: 'NORMAL',
       // NORMAL, DANGER
       targets: [],
-      status: 'DO_NOTHING',
+      status: PLAYER_STATUS.DO_NOTHING,
       // DO_NOTHING, FIND_GOD_BAGDE, FIND_BALK, RUN_AWAY
       player: {
         isStun: false,
@@ -36,7 +36,8 @@ class GameClient {
         isSwapWeapon: false,
         isRunning: false,
         isStop: true,
-        isBlocked: true,
+        isBlocked: false,
+        isMove: false,
         setupBomb: false,
         position: {
           x: 0,
@@ -111,18 +112,18 @@ class GameClient {
     this._updatePlayerState(players.filter((p) => p.id === this.playerId)[0]);
 
     // 0. Is target
-    if (this.state.targets.length > 0) {
-      if (
-        this.state.player.position.x === this.state.targets[0][0] &&
-        this.state.player.position.y === this.state.targets[0][1]
-      ) {
-        this.state.targets.shift();
-        this.state.player.isRunning = false;
-        if (this.state.status === 'SETUP_BOMB') {
-          this.setupBomb();
-        }
-      }
-    }
+    // if (this.state.targets.length > 0) {
+    //   if (
+    //     this.state.player.position.x === this.state.targets[0][0] &&
+    //     this.state.player.position.y === this.state.targets[0][1]
+    //   ) {
+    //     this.state.targets.shift();
+    //     this.state.player.isRunning = false;
+    //     if (this.state.status === 'SETUP_BOMB') {
+    //       this.setupBomb();
+    //     }
+    //   }
+    // }
 
     // 1. Check stun
     if (this.state.player.isStun) return;
@@ -132,6 +133,24 @@ class GameClient {
     }
 
     // 3. Using strategy to move
+    if (!this.state.player.isRunning) {
+      console.log('Check xem có target không:', this.state.targets);
+      if (this.state.targets.length !== 0) {
+        let bestWay = findShortestPath(
+          map,
+          this.state.player.position,
+          this.state.targets,
+        );
+
+        if (bestWay) {
+          console.log('Bắt đầu di chuyển');
+          this._drivePlayer(bestWay);
+          this.state.player.isRunning = true;
+          return;
+        }
+      }
+    }
+
     if (this.state.player.isGod) {
       this.handleGodMode(res);
     } else {
@@ -162,38 +181,101 @@ class GameClient {
       competitor.currentPosition.col === targets[0].x &&
       competitor.currentPosition.row === targets[0].y
     ) {
+      console.log('Huy hiệu đã bị cướp');
       this.state.targets.shift();
+      this.state.player.isRunning = false;
     }
   }
 
   _onPlayerStartMoving(res) {
-    this.state.player.isStop = false;
+    // this.state.player.isStop = false;
+    this.state.player.isMove = true;
   }
 
   _onPlayerStopMoving(res) {
     const { map } = res.map_info;
 
-    if (!this.state.player.isStop) {
-      this.state.player.isStop = true;
-    } else {
-      this.state.player.isRunning = false;
-      console.log('Player stop moving');
+    let competitor = res.map_info.players.filter(
+      (p) => p.id !== this.playerId,
+    )[0];
 
-      if (this.state.player.isSwapWeapon && this.state.player.isGod) {
-        console.log('Gặp vật cản ==> đổi vũ khí');
-        this.socket.emit(SOCKET_EVENT.ACTION, {
-          action: ACTION.SWITCH_WEAPON,
-        });
-
-        this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-          direction: DRIVE.USE_WEAPON,
-        });
-      } else {
-        this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-          direction: DRIVE.USE_WEAPON,
-        });
+    if (!this.state.player.isMove) {
+      console.log('Player bị chặn');
+      this.state.player.isBlocked = true;
+      if (
+        competitor.currentPosition.col === this.state.targets[0].x &&
+        competitor.currentPosition.row === this.state.targets[0].y
+      ) {
+        console.log('Huy hiệu đã bị cướp');
+        this.state.targets.shift();
+        this.state.player.isRunning = false;
+        return;
       }
+    } else {
+      this.state.player.isMove = false;
     }
+
+    if (this.state.player.isBlocked) {
+      this.state.player.isRunning = false;
+      console.log('Current position:', [
+        this.state.player.position.x,
+        this.state.player.position.y,
+      ]);
+      console.log('Targets:', this.state.targets);
+
+      let bestWay = findShortestPath(
+        map,
+        this.state.player.position,
+        this.state.targets,
+      );
+
+      if (bestWay) {
+        let firstDirection = bestWay[0];
+        if (firstDirection) {
+          let nextPos = DIRECTIONS[firstDirection];
+          if (
+            map[this.state.player.position.y + nextPos[1]][
+              this.state.player.position.x + nextPos[0]
+            ] === MAP.BRICK_WALL
+          ) {
+            if (this.state.player.isGod) {
+              if (this.state.player.isSwapWeapon) {
+                this.socket.emit(SOCKET_EVENT.ACTION, {
+                  action: ACTION.SWITCH_WEAPON,
+                });
+              }
+            }
+            this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
+              direction: DRIVE.USE_WEAPON,
+            });
+          }
+        }
+      }
+
+      // this.state.player.isBlocked = false;
+    }
+
+    // if (!this.state.player.isStop) {
+    //   this.state.player.isStop = true;
+    // } else {
+    //   this.state.player.isRunning = false;
+    //   console.log('Player stop moving');
+
+    //   if (this.state.player.isSwapWeapon && this.state.player.isGod) {
+    //     console.log('Gặp vật cản ==> đổi vũ khí');
+    //     this.socket.emit(SOCKET_EVENT.ACTION, {
+    //       action: ACTION.SWITCH_WEAPON,
+    //     });
+
+    //     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
+    //       direction: DRIVE.USE_WEAPON,
+    //     });
+    //   } else {
+    //     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
+    //       direction: DRIVE.USE_WEAPON,
+    //     });
+    //   }
+    // }
   }
 
   _onPlayerIsolated(res) {}
@@ -228,17 +310,12 @@ class GameClient {
     const { map_info } = res;
     const { bombs, map } = map_info;
 
-    this.state.player.setupBomb = true;
-    this.setStatus('RUN_AWAY');
+    const currentPos = [
+      this.state.player.position.x,
+      this.state.player.position.y,
+    ];
 
-    this.state.targets = findNearSafePosition(
-      map,
-      bombs,
-      this.state.player.position,
-    );
-
-    console.log('Chạy đến vị trí an toàn:', this.state.targets);
-    console.log('Vị trí hiện tại:', this.state.player.position);
+    this.state.targets = findNearSafePosition(map, bombs, currentPos);
 
     let bestWay = findShortestPath(
       map,
@@ -246,22 +323,16 @@ class GameClient {
       this.state.targets,
     );
 
-    console.log('--***--');
-
-    console.log('Best way:', bestWay);
+    console.log('Vị trí hiện tại:', this.state.player.position);
+    console.log('Vị trí an toàn:', this.state.targets);
+    console.log('Đường đi:', bestWay);
 
     this._drivePlayer(bestWay);
-    this.setStatus('WAIT');
-
-    // this.socket.emit(SOCKET_EVENT.ACTION, {
-    //   action: ACTION.SWITCH_WEAPON,
-    // });
+    this.setStatus(PLAYER_STATUS.RUN_AWAY);
   }
 
   _onBombExploded(res) {
-    if (this.state.status === 'SETUP_BOMB') {
-      this.state.player.setupBomb = true;
-
+    if (this.state.status === PLAYER_STATUS.SETUP_BOMB) {
       if (!this.state.player.isSwapWeapon) {
         this.socket.emit(SOCKET_EVENT.ACTION, {
           action: ACTION.SWITCH_WEAPON,
@@ -270,7 +341,7 @@ class GameClient {
     }
     console.log('Bomb nổ rồi đi ăn thôi');
 
-    this.setStatus('TAKE_SPOIL');
+    this.setStatus(PLAYER_STATUS.TAKE_SPOIL);
   }
 
   _onWoodenPestleSetup(res) {
@@ -281,6 +352,20 @@ class GameClient {
         });
       }
     }
+
+    const currentPos = [
+      this.state.player.position.x,
+      this.state.player.position.y,
+    ];
+    let dest = this.state.targets[0];
+
+    if (currentPos[0] === dest[0] && currentPos[1] === dest[1]) {
+      return;
+    } else {
+      this.state.player.isBlocked = false;
+      // this.state.player.isRunning = false;
+    }
+
     // if (isGod) {
     //   if (!this.state.player.isSwapWeapon) {
     //     this.socket.emit(SOCKET_EVENT.ACTION, {
@@ -305,6 +390,7 @@ class GameClient {
   }
 
   _drivePlayer(bestWay) {
+    console.log('GO GO GO!!!');
     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
       direction: bestWay,
     });
@@ -315,9 +401,7 @@ class GameClient {
             action: ACTION.SWITCH_WEAPON,
           });
       }
-      this.state.player.direction = bestWay[bestWay.length - 1];
       this.state.player.isRunning = true;
-      console.log('bestWay:', bestWay[-1]);
     }
   }
 
@@ -325,40 +409,61 @@ class GameClient {
     console.log('God Mode');
 
     const { map_info } = res;
-    const { map, players, spoils } = map_info;
+    const { map, players, bombs, spoils } = map_info;
 
-    // console.log(this.state.status);
+    // HANDLE FOLLOW STATUS
+
+    console.log('Status::', this.state.status);
+    console.log('Target::', this.state.targets);
+    console.log('Position::', [
+      this.state.player.position.x,
+      this.state.player.position.y,
+    ]);
 
     switch (this.state.status) {
-      case 'DO_NOTHING':
-        console.log('DO_NOTHING');
+      case PLAYER_STATUS.DO_NOTHING:
+        // Find pos to setup bomb
         const bestPosToSetupBomb = findPositionSetBomb(
           map,
           MAP.BALK,
           this.state.player.position,
         );
 
-        if (bestPosToSetupBomb.length !== 0) {
-          let bestWay = findShortestPath(
-            map,
-            this.state.player.position,
-            bestPosToSetupBomb,
-          );
+        let currentPos = [
+          this.state.player.position.x,
+          this.state.player.position.y,
+        ];
 
-          if (bestWay.length === 0) {
-            console.log('Đứng cạnh vật phẩm ==> đặt bomb luôn');
+        if (bestPosToSetupBomb) {
+          if (
+            currentPos[0] === bestPosToSetupBomb[0] &&
+            currentPos[1] === bestPosToSetupBomb[1]
+          ) {
+            console.log('Đứng cạnh vật phẩm ==> Đặt bomb luôn');
             this.setupBomb();
             return;
-          }
+          } else {
+            let { path: bestWay } = findPathToTarget(
+              map,
+              currentPos,
+              bestPosToSetupBomb,
+            );
 
-          console.log('Di chuyển tới vị trí đặt bomb với bestWay:', bestWay);
-          this.state.status = 'SETUP_BOMB';
-          this._drivePlayer(bestWay);
+            if (bestWay) {
+              console.log(
+                'Di chuyển tới vị trí đặt bomb với bestWay:',
+                bestWay,
+              );
+              this.setStatus(PLAYER_STATUS.SETUP_BOMB);
+              this._drivePlayer(bestWay);
+              this.state.targets = [bestPosToSetupBomb];
+            }
+          }
         } else {
-          console.log('Hết vật phẩm để đặt bomb');
+          console.log('Hết chỗ để đặt bomb :<<');
         }
         break;
-      case 'SETUP_BOMB':
+      case PLAYER_STATUS.SETUP_BOMB:
         if (this.state.targets.length !== 0) {
           if (
             this.state.player.position.x === this.state.targets[0][0] &&
@@ -366,26 +471,24 @@ class GameClient {
           ) {
             console.log('Đến nơi rồi thả nhẹ quả bomb');
             this.setupBomb();
-          } else {
-            console.log('Mục tiêu', this.state.targets);
-            console.log('Vị trí hiện tại', this.state.player.position);
-            let bestWay = findShortestPath(
-              map,
-              this.state.player.position,
-              this.state.targets,
-            );
-            this._drivePlayer(bestWay);
+            return;
           }
+          // else {
+          //   console.log('Mục tiêu', this.state.targets);
+          //   console.log('Vị trí hiện tại', this.state.player.position);
+          //   let bestWay = findShortestPath(
+          //     map,
+          //     this.state.player.position,
+          //     this.state.targets,
+          //   );
+          //   this._drivePlayer(bestWay);
+          // }
         } else {
-          console.log(
-            'Chả có mục tiêu nào cả, tìm kiếm mục tiêu thôi => pằng pằng',
-          );
-          this.setStatus('DO_NOTHING');
+          console.log('Chả có mục tiêu nào cả');
+          this.setStatus(PLAYER_STATUS.DO_NOTHING);
         }
-
-        console.log('SETUP_BOMB');
         break;
-      case 'TAKE_SPOIL':
+      case PLAYER_STATUS.TAKE_SPOIL:
         if (spoils.length !== 0) {
           let sortedSpoils = spoils.sort((a, b) => {
             return ITEM_SCORE[a.spoil_type] - ITEM_SCORE[b.spoil_type];
@@ -416,10 +519,10 @@ class GameClient {
             return;
           }
         }
-        this.setStatus('DO_NOTHING');
+        this.setStatus(PLAYER_STATUS.DO_NOTHING);
         console.log('TAKE_SPOIL');
         break;
-      case 'RUN_AWAY':
+      case PLAYER_STATUS.RUN_AWAY:
         console.log('Target', this.state.targets);
         if (this.state.targets.length !== 0) {
           if (
@@ -429,15 +532,15 @@ class GameClient {
             this.state.targets.shift();
             this.state.player.isRunning = false;
             console.log('Đến nơi an toàn rồi');
-            this.setStatus('WAIT');
+            this.setStatus(PLAYER_STATUS.WAIT);
           }
         } else {
-          this.setStatus('DO_NOTHING');
+          this.setStatus(PLAYER_STATUS.DO_NOTHING);
         }
 
         console.log('RUN_AWAY');
         break;
-      case 'WAIT':
+      case PLAYER_STATUS.WAIT:
         console.log('Chờ xiusuuuuuuuuuu !!!');
         console.log('WAIT');
         break;
@@ -445,7 +548,7 @@ class GameClient {
   }
 
   // *** FUNCTION SUPPORT ***
-  setupBomb(nextAct = 'TAKE_SPOIL') {
+  setupBomb(nextAct = PLAYER_STATUS.TAKE_SPOIL) {
     if (!this.state.player.isSwapWeapon) {
       this.socket.emit(SOCKET_EVENT.ACTION, {
         action: ACTION.SWITCH_WEAPON,
