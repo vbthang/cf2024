@@ -27,6 +27,7 @@ module.exports = ({ apiServer, gameId, playerId, mode }) => {
   socket.on('connect', () => {
     console.log('[Socket] connected to server 🎉🎉🎉');
     socket.emit('join game', { game_id: gameId, player_id: playerId });
+    // socket.emit('join game', { game_id: gameId, player_id: playerId.splice(0, 12) });
   });
 
   socket.on('disconnect', () => {

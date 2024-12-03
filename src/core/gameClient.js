@@ -23,8 +23,33 @@ class GameClient {
   constructor(socket, playerId) {
     this.socket = socket;
     this.playerId = playerId;
+    this.childId = `${playerId}_child`;
 
     this.state = {
+      mode: 'NORMAL',
+      // NORMAL, DANGER
+      targets: [],
+      status: PLAYER_STATUS.DO_NOTHING,
+      // DO_NOTHING, FIND_GOD_BAGDE, FIND_BALK, RUN_AWAY
+      player: {
+        isStun: false,
+        isGod: false,
+        isSwapWeapon: false,
+        isRunning: false,
+        isStop: true,
+        isBlocked: false,
+        isMove: false,
+        setupBomb: false,
+        isMarried: false,
+        position: {
+          x: 0,
+          y: 0,
+        },
+        score: 0,
+        brickWall: 0,
+      },
+    };
+    this.childState = {
       mode: 'NORMAL',
       // NORMAL, DANGER
       targets: [],
@@ -77,8 +102,9 @@ class GameClient {
         break;
       // case TAG.PLAYER_INTO_WEDDING_ROOM:
       // case TAG.PLAYER_OUTTO_WEDDING_ROOM:
-      // case TAG.PLAYER_COMPLETED_WEDDING:
-
+      case TAG.PLAYER_COMPLETED_WEDDING:
+        this._onPlayerCompletedWedding(res);
+        break;
       // // CASE BOMB
       case TAG.BOMB_SETUP:
         this._onBombSetup(res);
@@ -108,23 +134,19 @@ class GameClient {
   _onGameUpdate(res) {
     const { map_info } = res;
     const { players, map, bombs, spoils } = map_info;
+    const enemy = players.filter(
+      (p) => !this.playerId.includes(p.id),
+    )[0];
+    const player = players.filter((p) => this.playerId.includes(p.id))[0];
+    this._updatePlayerState(player, 'parent');
 
-    this._updatePlayerState(players.filter((p) => p.id === this.playerId)[0]);
-
-    // 0. Is target
-    // if (this.state.targets.length > 0) {
-    //   if (
-    //     this.state.player.position.x === this.state.targets[0][0] &&
-    //     this.state.player.position.y === this.state.targets[0][1]
-    //   ) {
-    //     this.state.targets.shift();
-    //     this.state.player.isRunning = false;
-    //     if (this.state.status === 'SETUP_BOMB') {
-    //       this.setupBomb();
-    //     }
-    //   }
-    // }
-
+    // kill enemy
+    if (player?.timeToUseSpecialWeapons > 0 && player?.hasTransform  && enemy?.hasTransform){
+      this.killEnemy({
+        enemyCol: enemy?.currentPosition.col,
+        enemyRow: enemy?.currentPosition.row,
+      });
+    }    
     // 1. Check stun
     if (this.state.player.isStun) return;
 
@@ -170,6 +192,42 @@ class GameClient {
         this.state.player.isRunning = true;
       }
     }
+    // Thang con
+    if (this.state.player.isMarried) {
+      console.log('childId: ', this.childId);
+      this._updatePlayerState(
+        players.filter((p) => p.id === this.childId)[0],
+        'child',
+      );
+      if (this.childState.player.isStun) return;
+
+      // 2. Check danger zone (bomb, hammer, wind)
+      if (bombs.length > 0) {
+      }
+
+      // 3. Using strategy to move
+      if (!this.childState.player.isRunning) {
+        console.log(
+          'child: Check xem có target không:',
+          this.childState.targets,
+        );
+        if (this.childState.targets.length !== 0) {
+          let bestWay = findShortestPath(
+            map,
+            this.childState.player.position,
+            this.childState.targets,
+          );
+
+          if (bestWay) {
+            console.log('child: Bắt đầu di chuyển');
+            this._drivePlayer(bestWay, 'child');
+            this.childState.player.isRunning = true;
+            return;
+          }
+        }
+      }
+      this.handleGodMode(res);
+    }
   }
 
   _onPlayerMovingBanned(res) {
@@ -178,8 +236,8 @@ class GameClient {
     )[0];
 
     if (
-      competitor.currentPosition.col === targets[0].x &&
-      competitor.currentPosition.row === targets[0].y
+      competitor.currentPosition.col === this.state?.targets[0]?.x &&
+      competitor.currentPosition.row === this.state?.targets[0]?.y
     ) {
       console.log('Huy hiệu đã bị cướp');
       this.state.targets.shift();
@@ -200,11 +258,11 @@ class GameClient {
     )[0];
 
     if (!this.state.player.isMove) {
-      console.log('Player bị chặn');
       this.state.player.isBlocked = true;
+      console.log('Player bị chặn');
       if (
-        competitor.currentPosition.col === this.state.targets[0].x &&
-        competitor.currentPosition.row === this.state.targets[0].y
+        competitor.currentPosition.col === this.state?.targets[0]?.x &&
+        competitor.currentPosition.row === this.state?.targets[0]?.y
       ) {
         console.log('Huy hiệu đã bị cướp');
         this.state.targets.shift();
@@ -251,31 +309,7 @@ class GameClient {
           }
         }
       }
-
-      // this.state.player.isBlocked = false;
     }
-
-    // if (!this.state.player.isStop) {
-    //   this.state.player.isStop = true;
-    // } else {
-    //   this.state.player.isRunning = false;
-    //   console.log('Player stop moving');
-
-    //   if (this.state.player.isSwapWeapon && this.state.player.isGod) {
-    //     console.log('Gặp vật cản ==> đổi vũ khí');
-    //     this.socket.emit(SOCKET_EVENT.ACTION, {
-    //       action: ACTION.SWITCH_WEAPON,
-    //     });
-
-    //     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-    //       direction: DRIVE.USE_WEAPON,
-    //     });
-    //   } else {
-    //     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-    //       direction: DRIVE.USE_WEAPON,
-    //     });
-    //   }
-    // }
   }
 
   _onPlayerIsolated(res) {}
@@ -304,7 +338,10 @@ class GameClient {
 
   _onPlayerOuttoWeddingRoom(res) {}
 
-  _onPlayerCompletedWedding(res) {}
+  _onPlayerCompletedWedding(res) {
+    this.state.player.isMarried = true;
+    console.log('isMarried: ', this.state.player.isMarried);
+  }
 
   _onBombSetup(res) {
     const { map_info } = res;
@@ -365,14 +402,6 @@ class GameClient {
       this.state.player.isBlocked = false;
       // this.state.player.isRunning = false;
     }
-
-    // if (isGod) {
-    //   if (!this.state.player.isSwapWeapon) {
-    //     this.socket.emit(SOCKET_EVENT.ACTION, {
-    //       action: ACTION.SWITCH_WEAPON,
-    //     });
-    //   }
-    // }
   }
 
   _onHammerExploded(res) {}
@@ -381,18 +410,33 @@ class GameClient {
 
   // *** FUNCTION SUPPORT ***
 
-  _updatePlayerState(player) {
-    this.state.player.position.x = player.currentPosition.col;
-    this.state.player.position.y = player.currentPosition.row;
-    this.state.player.isGod = player.hasTransform;
-    this.state.player.score = player.score;
-    this.state.player.isSwapWeapon = player.currentWeapon === 2;
+  _updatePlayerState(player, character) {
+    if (character === 'parent') {
+      this.state.player.position.x = player?.currentPosition.col;
+      this.state.player.position.y = player?.currentPosition.row;
+      this.state.player.isGod = player?.hasTransform;
+      this.state.player.score = player?.score;
+      this.state.player.isSwapWeapon = player?.currentWeapon === 2;
+
+      if (player?.eternalBadge && !this.state.player.isMarried) {
+        this.socket.emit(SOCKET_EVENT.ACTION, {
+          action: ACTION.MARRY_WIFE,
+        });
+      }
+    } else {
+      console.log('update state child: ');
+      this.childState.player.position.y = player?.currentPosition.row;
+      this.childState.player.isGod = player?.hasTransform;
+      this.childState.player.score = player?.score;
+      this.childState.player.isSwapWeapon = player?.currentWeapon === 2;
+    }
   }
 
-  _drivePlayer(bestWay) {
+  _drivePlayer(bestWay, characterType) {
     console.log('GO GO GO!!!');
     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
       direction: bestWay,
+      characterType,
     });
     if (bestWay) {
       if (this.state.player.isGod) {
@@ -473,16 +517,6 @@ class GameClient {
             this.setupBomb();
             return;
           }
-          // else {
-          //   console.log('Mục tiêu', this.state.targets);
-          //   console.log('Vị trí hiện tại', this.state.player.position);
-          //   let bestWay = findShortestPath(
-          //     map,
-          //     this.state.player.position,
-          //     this.state.targets,
-          //   );
-          //   this._drivePlayer(bestWay);
-          // }
         } else {
           console.log('Chả có mục tiêu nào cả');
           this.setStatus(PLAYER_STATUS.DO_NOTHING);
@@ -545,10 +579,147 @@ class GameClient {
         console.log('WAIT');
         break;
     }
+
+    if (this.state.player.isMarried) {
+      switch (this.childState.status) {
+        case PLAYER_STATUS.DO_NOTHING:
+          // Find pos to setup bomb
+          const bestPosToSetupBomb = findPositionSetBomb(
+            map,
+            MAP.BALK,
+            this.childState.player.position,
+          );
+
+          let currentPos = [
+            this.childState.player.position.x,
+            this.childState.player.position.y,
+          ];
+
+          if (bestPosToSetupBomb) {
+            if (
+              currentPos[0] === bestPosToSetupBomb[0] &&
+              currentPos[1] === bestPosToSetupBomb[1]
+            ) {
+              console.log('Đứng cạnh vật phẩm ==> Đặt bomb luôn');
+              this.setupBomb();
+              return;
+            } else {
+              let { path: bestWay } = findPathToTarget(
+                map,
+                currentPos,
+                bestPosToSetupBomb,
+              );
+
+              if (bestWay) {
+                console.log(
+                  'Di chuyển tới vị trí đặt bomb với bestWay:',
+                  bestWay,
+                );
+                this.setStatus(PLAYER_STATUS.SETUP_BOMB);
+                this._drivePlayer(bestWay, 'child');
+                this.childState.targets = [bestPosToSetupBomb];
+              }
+            }
+          } else {
+            console.log('Hết chỗ để đặt bomb :<<');
+          }
+          break;
+        case PLAYER_STATUS.SETUP_BOMB:
+          if (this.childState.targets.length !== 0) {
+            if (
+              this.childState.player.position.x ===
+                this.childState.targets[0][0] &&
+              this.childState.player.position.y ===
+                this.childState.targets[0][1]
+            ) {
+              console.log('Đến nơi rồi thả nhẹ quả bomb');
+              this.setupBomb();
+              return;
+            }
+          } else {
+            console.log('Chả có mục tiêu nào cả');
+            this.setStatus(PLAYER_STATUS.DO_NOTHING);
+          }
+          break;
+        case PLAYER_STATUS.TAKE_SPOIL:
+          if (spoils.length !== 0) {
+            let sortedSpoils = spoils.sort((a, b) => {
+              return ITEM_SCORE[a.spoil_type] - ITEM_SCORE[b.spoil_type];
+            });
+
+            console.log(sortedSpoils);
+
+            for (let spoil of sortedSpoils) {
+              if (
+                Math.abs(spoil.row - this.childState.player.position.y) >= 7 ||
+                Math.abs(spoil.col - this.childState.player.position.x) >= 7
+              ) {
+                console.log('Vật phẩm xa rồi');
+                continue;
+              }
+
+              this.childState.targets = [[spoil.col, spoil.row]];
+              let bestWay = findShortestPath(
+                map,
+                this.childState.player.position,
+                this.childState.targets,
+              );
+
+              console.log('Target::', this.childState.targets);
+              console.log('Best way::', bestWay);
+
+              this._drivePlayer(bestWay, 'child');
+              return;
+            }
+          }
+          this.setStatus(PLAYER_STATUS.DO_NOTHING);
+          console.log('TAKE_SPOIL');
+          break;
+        case PLAYER_STATUS.RUN_AWAY:
+          console.log('Target', this.childState.targets);
+          if (this.childState.targets.length !== 0) {
+            if (
+              this.childState.player.position.x ===
+                this.childState.targets[0][0] &&
+              this.childState.player.position.y ===
+                this.childState.targets[0][1]
+            ) {
+              this.childState.targets.shift();
+              this.childState.player.isRunning = false;
+              console.log('Đến nơi an toàn rồi');
+              this.setStatus(PLAYER_STATUS.WAIT);
+            }
+          } else {
+            this.setStatus(PLAYER_STATUS.DO_NOTHING);
+          }
+
+          console.log('RUN_AWAY');
+          break;
+        case PLAYER_STATUS.WAIT:
+          console.log('Chờ xiusuuuuuuuuuu !!!');
+          console.log('WAIT');
+          break;
+      }
+    }
   }
 
   // *** FUNCTION SUPPORT ***
   setupBomb(nextAct = PLAYER_STATUS.TAKE_SPOIL) {
+    if (this.state.player.isMarried) {
+      if (!this.childState.player.isSwapWeapon) {
+        this.socket.emit(SOCKET_EVENT.ACTION, {
+          action: ACTION.SWITCH_WEAPON,
+          characterType: 'child',
+        });
+      }
+
+      this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
+        direction: DRIVE.USE_WEAPON,
+        characterType: 'child',
+      });
+
+      this.childState.status = nextAct;
+    }
     if (!this.state.player.isSwapWeapon) {
       this.socket.emit(SOCKET_EVENT.ACTION, {
         action: ACTION.SWITCH_WEAPON,
@@ -562,8 +733,32 @@ class GameClient {
     this.state.status = nextAct;
   }
 
-  setStatus(status) {
+  setStatus(status, character) {
+    if (character) {
+      this.childState.status = status;
+      return;
+    }
     this.state.status = status;
+  }
+
+  killEnemy(target) {
+    const { enemyCol, enemyRow } = target;
+    const distance =
+      Math.abs(this.state.player.position.x - enemyCol) +
+      Math.abs(this.state.player.position.y - enemyRow);
+    console.log('distance: ', distance);
+    if (distance <= 7 && distance >= 5) {
+      this.socket.emit(SOCKET_EVENT.ACTION, {
+        action: ACTION.USE_WEAPON,
+        payload: {
+          destination: {
+            row: enemyRow,
+            col: enemyCol,
+          },
+        },
+      });
+      return;
+    }
   }
 }
 

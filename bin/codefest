@@ -12,16 +12,19 @@ const { argv } = yargs
     describe: 'API Server Url',
     type: 'string',
     default: 'http://localhost',
+    // default: 'http://192.168.0.111:3000',
   })
   .option('game-id', {
     alias: 'g',
     describe: 'Game ID',
     type: 'string',
+    default: 'e2548684-32ab-4ba4-b503-341c7f5dd1f2',
   })
   .option('player-id', {
     alias: 'p',
     describe: 'Player ID',
     type: 'string',
+    default: '7a395f61-405e-4df6-b521-6fd63e61f8f5'
   })
   .option('mode', {
     alias: 'm',
