@@ -50,6 +50,7 @@ module.exports = {
   ACTION: {
     SWITCH_WEAPON: 'switch weapon',
     USE_WEAPON: 'use weapon',
+    MARRY_WIFE: 'marry wife',
   },
   TAG: {
     PLAYER_START_MOVING: 'player:start-moving',
@@ -64,7 +65,7 @@ module.exports = {
 
     PLAYER_INTO_WEDDING_ROOM: 'player:into-wedding-room',
     PLAYER_OUTTO_WEDDING_ROOM: 'player:outto-wedding-room',
-    PLAYER_COMPLETED_WEDDING: 'player:completed wedding',
+    PLAYER_COMPLETED_WEDDING: 'player:wedding-completed',
 
     BOMB_SETUP: 'bomb:setup',
     BOMB_EXPLODED: 'bomb:exploded',
