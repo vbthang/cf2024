@@ -99,7 +99,7 @@ const checkBomb = (x, y, bombs) => {
     console.log('Bomb:', bomb);
     console.log(x, y);
 
-    if (x === row && y === col) {
+    if (x === col && y === row) {
       console.log('Vị trí có bomb:', [x, y]);
       return true;
     }

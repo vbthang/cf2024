@@ -11,8 +11,8 @@ const { argv } = yargs
     alias: 'a',
     describe: 'API Server Url',
     type: 'string',
-    // default: 'http://localhost',
-    default: 'http://192.168.0.100:3000',
+    default: 'http://localhost',
+    // default: 'http://192.168.0.100:3000',
   })
   .option('game-id', {
     alias: 'g',
