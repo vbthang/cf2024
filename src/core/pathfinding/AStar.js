@@ -21,7 +21,7 @@ const DIRECTIONS = {
 
 const COSTS = {
   move: 1,
-  breakWall: 8,
+  breakWall: 6,
 };
 
 function findTargets(map, target) {
@@ -154,6 +154,30 @@ function findNearSafePosition(map, bombs, current) {
 
         console.log('Vị trí an toàn:', [x, y]);
         console.log('Vị trí hiện tại:', [startX, startY]);
+
+        let bestPath = findPathToTarget(map, [startX, startY], [x, y]);
+        console.log('CHECK ________________________________');
+        console.log('Đường đi:', bestPath);
+        let isSafe = true;
+        if (bestPath && bestPath.path.length !== 0) {
+          let pos = [startX, startY];
+          for (let i = 0; i < bestPath.path.length; i++) {
+            // Check pos
+            let [dx, dy] = DIRECTIONS[bestPath.path[i]];
+            pos = [pos[0] + dx, pos[1] + dy];
+            console.log('Check vị trí:', bestPath.path[i]);
+            console.log('Check vị trí:', pos);
+            console.log([dx, dy]);
+            console.log('Map Value :', map[pos[1]][pos[0]]);
+            console.log(MAP[map[pos[1]][pos[0]]]);
+            if (map[pos[1]][pos[0]] === MAP.BRICK_WALL) {
+              console.log('Vị trí bị chặn:', pos);
+              isSafe = false;
+              break;
+            }
+          }
+        }
+        if (!isSafe) continue;
 
         return [[x, y]];
       }

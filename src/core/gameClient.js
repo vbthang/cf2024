@@ -180,15 +180,12 @@ class GameClient {
       //   this.state.player.position.x,
       //   this.state.player.position.y,
       // ];
-
       // this.state.targets = findNearSafePosition(map, bombs, currentPos);
-
       // let bestWay = findShortestPath(
       //   map,
       //   this.state.player.position,
       //   this.state.targets,
       // );
-
       // this._drivePlayer(bestWay);
       // this.setStatus(PLAYER_STATUS.RUN_AWAY);
       // return; // Dừng các logic khác để ưu tiên né bom
@@ -213,7 +210,6 @@ class GameClient {
         this.state.player.isRunning = true;
       }
     }
-
     this.checkEnemyPositionAndHandle(enemy);
 
     // Thang con
@@ -888,8 +884,8 @@ class GameClient {
     };
     const currentPosition = enemy?.currentPosition;
     const distance =
-      Math.abs(this.state.player.position.x - currentPosition.col) +
-      Math.abs(this.state.player.position.y - currentPosition.row);
+      Math.abs(this.state.player.position.x - currentPosition?.col) +
+      Math.abs(this.state.player.position.y - currentPosition?.row);
     if (this.state.player.isGod) {
       if (this.state.player.godType == 1) {
         if (
