@@ -25,7 +25,8 @@ class GameClient {
     // this.playerId = playerId.slice(0, 11);
     this.playerId = playerId.slice(0, 13);
     this.childId = `${this.playerId}_child`;
-
+    this.godType = 1;
+    this.timeToUseSpecialWeapons = 5;
     this.state = {
       mode: 'NORMAL',
       // NORMAL, DANGER
@@ -35,7 +36,6 @@ class GameClient {
       player: {
         isStun: false,
         isGod: false,
-        godType: 1,
         isSwapWeapon: false,
         isRunning: false,
         isStop: true,
@@ -79,8 +79,13 @@ class GameClient {
   onTicktack(res) {
     const { timestamp, tag } = res;
 
-    console.log(`[${timestamp}] :: ${tag}`);
-
+    console.log(
+      `[${timestamp}] :::::::::::::::::::::::::::::::::::::::::::::::: ${tag}`,
+    );
+    const { map_info } = res;
+    const { players } = map_info;
+    const enemy = players.filter((p) => !this.playerId.includes(p.id))[0];
+    this.checkEnemyPositionAndHandle(enemy);
     switch (tag) {
       // Player tag
       case TAG.GAME_START:
@@ -137,6 +142,11 @@ class GameClient {
     const { map_info } = res;
     const { players, map, bombs, spoils } = map_info;
     const enemy = players.filter((p) => !this.playerId.includes(p.id))[0];
+    const enemyChild = players.filter((p) => !this.playerId.includes(p.id))[1];
+    console.log(
+      `enemyChild===================================================`,
+      enemyChild,
+    );
     const player = players.filter((p) => this.playerId.includes(p.id))[0];
     const child = players.filter((p) => p.id === this.childId)[0];
     this._updatePlayerState(player, 'parent');
@@ -210,7 +220,8 @@ class GameClient {
         this.state.player.isRunning = true;
       }
     }
-    this.checkEnemyPositionAndHandle(enemy);
+    // this.checkEnemyPositionAndHandle(enemy);
+    // this.checkEnemyPositionAndHandle(enemyChild);
 
     // Thang con
     if (child) {
@@ -220,7 +231,7 @@ class GameClient {
       // 2. Check danger zone (bomb, hammer, wind)
       if (bombs.length > 0) {
       }
-
+      this.handleGodModeForChild(res);
       // 3. Using strategy to move
       if (!this.childState.player.isRunning) {
         console.log(
@@ -242,7 +253,6 @@ class GameClient {
           }
         }
       }
-      this.handleGodModeForChild(res);
     }
   }
 
@@ -262,8 +272,8 @@ class GameClient {
   }
 
   _onPlayerStartMoving(res) {
-    // this.state.player.isStop = false;
     this.state.player.isMove = true;
+    // this._onGameUpdate(res);
   }
 
   _onPlayerStopMoving(res) {
@@ -460,6 +470,8 @@ class GameClient {
       this.state.player.isGod = player?.hasTransform;
       this.state.player.score = player?.score;
       this.state.player.isSwapWeapon = player?.currentWeapon === 2;
+      this.godType = player?.transformType;
+      this.timeToUseSpecialWeapons = player?.timeToUseSpecialWeapons;
 
       if (player?.eternalBadge && !this.state.player.isMarried) {
         this.socket.emit(SOCKET_EVENT.ACTION, {
@@ -832,6 +844,7 @@ class GameClient {
   }
 
   useSonTinhWeapon(payload) {
+    console.log('action: useSonTinhWeapon');
     console.log('useSonTinhWeapon', payload);
     this.socket.emit(SOCKET_EVENT.ACTION, {
       action: ACTION.USE_WEAPON,
@@ -848,6 +861,7 @@ class GameClient {
   }
 
   stunEnemy() {
+    console.log('stun enemy');
     if (this.state.player.isSwapWeapon) {
       this.socket.emit(SOCKET_EVENT.ACTION, {
         action: ACTION.SWITCH_WEAPON,
@@ -868,17 +882,23 @@ class GameClient {
     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
       direction: DRIVE.USE_WEAPON,
     });
+    console.log('action: stunned');
+
     this.socket.emit(SOCKET_EVENT.ACTION, {
       action: ACTION.SWITCH_WEAPON,
     });
+    console.log('action: doi thanh vu khi bom');
+
     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-      direction: DRIVE.USE_WEAPON,
+      direction: 'DRIVE.USE_WEAPON',
     });
+    console.log('action: dat bom thanh cong');
+
     return;
   }
 
   checkEnemyPositionAndHandle(enemy) {
-    let analysisEnemy = {
+    const analysisEnemy = {
       tag: '',
       payload: {},
     };
@@ -886,14 +906,26 @@ class GameClient {
     const distance =
       Math.abs(this.state.player.position.x - currentPosition?.col) +
       Math.abs(this.state.player.position.y - currentPosition?.row);
+    console.log(
+      ':::::::::::::::::::::::::::::::::::::::::::::::::distance : ',
+      distance,
+    );
+    console.log(
+      ':::::::::::::::::::::::::::::::::::::::::::::::::timeToUseSpecialWeapons : ',
+      this.timeToUseSpecialWeapons,
+    );
+
     if (this.state.player.isGod) {
-      if (this.state.player.godType == 1) {
+      if (this.godType == 1) {
         if (
           distance <= 7 &&
           distance >= 5 &&
           enemy.hasTransform &&
-          this.state.player.timeToUseSpecialWeapons > 0
+          this.timeToUseSpecialWeapons > 0
         ) {
+          console.log(
+            ':::::::::::::::::::::::::::::::::::::::::::::::::distance 5,6,7',
+          );
           analysisEnemy.tag = 'canUseSonTinhWeapon';
           analysisEnemy.payload = {
             destination: {
@@ -904,7 +936,7 @@ class GameClient {
         } else if (distance == 1) {
           analysisEnemy.tag = 'canStunAndSetUpBom';
         }
-      } else if (this.state.player.godType == 2) {
+      } else if (this.godType == 2) {
         // xử lý bắn đạn của thủy tinh
         analysisEnemy.tag = 'canUseThuyTinhWeapon';
       }
@@ -913,24 +945,26 @@ class GameClient {
         analysisEnemy.tag = 'canStunEnemy';
       }
     }
-
+    console.log(":::::::::::::::::::::::::::::::::::::analysisEnemy: ", analysisEnemy);
     this.handleWhenEnemyIsNearby(analysisEnemy);
     return;
   }
 
   handleWhenEnemyIsNearby(analysisEnemy) {
+    console.log('tag: ', analysisEnemy.tag);
+
     switch (analysisEnemy.tag) {
       case 'canUseSonTinhWeapon':
         this.useSonTinhWeapon(analysisEnemy.payload);
         break;
       case 'canStunAndSetUpBom':
-        this.stunAndSetBom;
+        this.stunAndSetBom();
         break;
       case 'canStunEnemy':
-        this.stunEnemy;
+        this.stunEnemy();
         break;
       case 'canUseThuyTinhWeapon':
-        this.useThuyTinhWeapon;
+        this.useThuyTinhWeapon();
         break;
       default:
         break;
