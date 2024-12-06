@@ -39,7 +39,8 @@ module.exports = ({ apiServer, gameId, playerId, mode }) => {
   });
 
   const gameClient = new GameClient(socket, playerId);
-  const type = CHARACTER.MOUNTAIN_GOD;
+  const typeMountainGod = CHARACTER.MOUNTAIN_GOD;
+  const typeSeeGod = CHARACTER.SEA_GOD;
 
   socket.on(SOCKET_EVENT.JOIN_GAME, (res) => {
     console.log('[Socket] join-game responsed', res);
@@ -48,7 +49,8 @@ module.exports = ({ apiServer, gameId, playerId, mode }) => {
     // If not emit, random character will be selected
     socket.emit(SOCKET_EVENT.REGISTER_CHARACTER_POWER, {
       gameId,
-      type,
+      // type: typeMountainGod,
+      type: typeSeeGod,
     });
   });
 

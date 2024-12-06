@@ -25,8 +25,10 @@ class GameClient {
     // this.playerId = playerId.slice(0, 11);
     this.playerId = playerId.slice(0, 13);
     this.childId = `${this.playerId}_child`;
-    this.godType = 1;
+    // this.godType = 1;
+    this.godType = 2;
     this.timeToUseSpecialWeapons = 5;
+    this.justSetBomToKillEnemy = false;
     this.state = {
       mode: 'NORMAL',
       // NORMAL, DANGER
@@ -151,11 +153,11 @@ class GameClient {
   _onGameStart(res) {}
 
   _onGameUpdate(payload) {
-    const { player,child, enemy, enemyChild, map, bombs } = payload;
+    const { player, child, enemy, enemyChild, map, bombs } = payload;
 
     this._updatePlayerState(player, 'parent');
-    this.checkEnemyPositionAndHandle(enemy);
-    this.checkEnemyPositionAndHandle(enemyChild);
+    this.checkEnemyPositionAndHandle(enemy, map);
+    // this.checkEnemyPositionAndHandle(enemyChild, map);
     // 1. Check stun
     if (this.state.player.isStun) return;
 
@@ -405,7 +407,10 @@ class GameClient {
       enemyDistance < 3 || enemyChildDistance < 3
         ? bombs // Dodge all bombs if enemy is close
         : playerBombs; // Only dodge player's bombs if enemy is far
-    console.log(`distance:::::::::::::::::::::::::::::::::::::::::::::`,bombsToDodge);
+    console.log(
+      `distance:::::::::::::::::::::::::::::::::::::::::::::`,
+      bombsToDodge,
+    );
     // if (bombs)
     //   if (distance < 3 && childDistanse < 3) {
     //     if (child) {
@@ -425,7 +430,7 @@ class GameClient {
     //     this._drivePlayer(bestWay);
     //     this.setStatus(PLAYER_STATUS.RUN_AWAY);
     //   }
-    if(bombsToDodge.length === 0) {
+    if (bombsToDodge.length === 0) {
       console.log(`khong co cai gi thi out thoi`);
       return;
     }
@@ -452,12 +457,15 @@ class GameClient {
   }
 
   _onBombExploded(res) {
+    this.justSetBomToKillEnemy = false;
+    console.log("===================_onBombExploded");
     if (this.state.status === PLAYER_STATUS.SETUP_BOMB) {
       if (!this.state.player.isSwapWeapon) {
         this.socket.emit(SOCKET_EVENT.ACTION, {
           action: ACTION.SWITCH_WEAPON,
         });
-      }
+      };
+      
     }
     console.log('Bomb nổ rồi đi ăn thôi');
 
@@ -504,15 +512,15 @@ class GameClient {
       this.godType = player?.transformType;
       this.timeToUseSpecialWeapons = player?.timeToUseSpecialWeapons;
 
-      if (player?.eternalBadge && !this.state.player.isMarried) {
-        this.socket.emit(SOCKET_EVENT.ACTION, {
-          action: ACTION.MARRY_WIFE,
-        });
-      }
+      // if (player?.eternalBadge && !this.state.player.isMarried) {
+      //   this.socket.emit(SOCKET_EVENT.ACTION, {
+      //     action: ACTION.MARRY_WIFE,
+      //   });
+      // }
 
-      if (this.childState.player.position.x !== 0) {
-        this.state.player.isMarried = true;
-      }
+      // if (this.childState.player.position.x !== 0) {
+      //   this.state.player.isMarried = true;
+      // }
     } else {
       this.childState.player.position.x = player?.currentPosition.col;
       this.childState.player.position.y = player?.currentPosition.row;
@@ -926,15 +934,15 @@ class GameClient {
     return;
   }
 
-  checkEnemyPositionAndHandle(enemy) {
+  checkEnemyPositionAndHandle(enemy, map) {
     const analysisEnemy = {
       tag: '',
       payload: {},
     };
-    const currentPosition = enemy?.currentPosition;
+    const currentEnemyPosition = enemy?.currentPosition;
     const distance =
-      Math.abs(this.state.player.position.x - currentPosition?.col) +
-      Math.abs(this.state.player.position.y - currentPosition?.row);
+      Math.abs(this.state.player.position.x - currentEnemyPosition?.col) +
+      Math.abs(this.state.player.position.y - currentEnemyPosition?.row);
     console.log(
       ':::::::::::::::::::::::::::::::::::::::::::::::::distance : ',
       distance,
@@ -946,6 +954,10 @@ class GameClient {
 
     if (this.state.player.isGod) {
       if (this.godType == 1) {
+        if (distance == 1) {
+          analysisEnemy.tag = 'canStunAndSetUpBom';
+          // analysisEnemy.tag = 'canStunEnemy';
+        }
         if (
           distance <= 7 &&
           distance >= 5 &&
@@ -958,16 +970,31 @@ class GameClient {
           analysisEnemy.tag = 'canUseSonTinhWeapon';
           analysisEnemy.payload = {
             destination: {
-              col: currentPosition.col,
-              row: currentPosition.row,
+              col: currentEnemyPosition.col,
+              row: currentEnemyPosition.row,
             },
           };
-        } else if (distance == 1) {
-          analysisEnemy.tag = 'canStunAndSetUpBom';
         }
       } else if (this.godType == 2) {
-        // xử lý bắn đạn của thủy tinh
-        analysisEnemy.tag = 'canUseThuyTinhWeapon';
+        if (
+          distance < 9 &&
+          distance > 0 &&
+          this.timeToUseSpecialWeapons > 0
+        ) {
+          let { path: bestWay } = findPathToTarget(
+            map,
+            [this.state.player.position.x, this.state.player.position.y],
+            [currentEnemyPosition.col, currentEnemyPosition.row],
+          );
+
+          if (bestWay && !this.justSetBomToKillEnemy) {
+            console.log('Thuy Tinh di chuyển kill enemy:', bestWay);
+            this._drivePlayer(bestWay);
+          }
+          if (distance <= 4) {
+            analysisEnemy.tag = 'canUseThuyTinhWeapon';
+          }
+        }
       }
     } else {
       if (distance == 1) {
