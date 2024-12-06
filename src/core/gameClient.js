@@ -78,19 +78,31 @@ class GameClient {
 
   onTicktack(res) {
     const { timestamp, tag } = res;
+    const { map_info } = res;
+    const { players, map, bombs, spoils } = map_info;
 
     console.log(
       `[${timestamp}] :::::::::::::::::::::::::::::::::::::::::::::::: ${tag}`,
     );
-    const { map_info } = res;
-    const { players } = map_info;
+    const player = players.filter((p) => this.playerId.includes(p.id))[0];
+    const child = players.filter((p) => p.id === this.childId)[0];
     const enemy = players.filter((p) => !this.playerId.includes(p.id))[0];
-    this.checkEnemyPositionAndHandle(enemy);
+    const enemyChild = players.filter((p) => p.id === `${enemy?.id}_child`)[0];
+
+    const payload = {
+      player,
+      child,
+      enemy,
+      enemyChild,
+      map,
+      bombs,
+      spoils,
+    };
     switch (tag) {
       // Player tag
       case TAG.GAME_START:
       case TAG.GAME_UPDATE:
-        this._onGameUpdate(res);
+        this._onGameUpdate(payload);
         break;
 
       // CASE PLAYER
@@ -114,7 +126,7 @@ class GameClient {
         break;
       // // CASE BOMB
       case TAG.BOMB_SETUP:
-        this._onBombSetup(res);
+        this._onBombSetup(payload);
         break;
       case TAG.BOMB_EXPLODED:
         this._onBombExploded(res);
@@ -138,29 +150,12 @@ class GameClient {
   // FUNCTION FOR TICKTACK PLAYER
   _onGameStart(res) {}
 
-  _onGameUpdate(res) {
-    const { map_info } = res;
-    const { players, map, bombs, spoils } = map_info;
-    const enemy = players.filter((p) => !this.playerId.includes(p.id))[0];
-    const enemyChild = players.filter((p) => !this.playerId.includes(p.id))[1];
-    console.log(
-      `enemyChild===================================================`,
-      enemyChild,
-    );
-    const player = players.filter((p) => this.playerId.includes(p.id))[0];
-    const child = players.filter((p) => p.id === this.childId)[0];
+  _onGameUpdate(payload) {
+    const { player,child, enemy, enemyChild, map, bombs } = payload;
+
     this._updatePlayerState(player, 'parent');
-    // kill enemy
-    // if (
-    //   player?.timeToUseSpecialWeapons > 0 &&
-    //   player?.hasTransform &&
-    //   enemy?.hasTransform
-    // ) {
-    //   this.useSonTinhWeapon({
-    //     col: enemy?.currentPosition.col,
-    //     row: enemy?.currentPosition.row,
-    //   });
-    // }
+    this.checkEnemyPositionAndHandle(enemy);
+    this.checkEnemyPositionAndHandle(enemyChild);
     // 1. Check stun
     if (this.state.player.isStun) return;
 
@@ -186,23 +181,10 @@ class GameClient {
     }
 
     if (bombs.length > 0) {
-      // const currentPos = [
-      //   this.state.player.position.x,
-      //   this.state.player.position.y,
-      // ];
-      // this.state.targets = findNearSafePosition(map, bombs, currentPos);
-      // let bestWay = findShortestPath(
-      //   map,
-      //   this.state.player.position,
-      //   this.state.targets,
-      // );
-      // this._drivePlayer(bestWay);
-      // this.setStatus(PLAYER_STATUS.RUN_AWAY);
-      // return; // Dừng các logic khác để ưu tiên né bom
     }
 
     if (this.state.player.isGod) {
-      this.handleGodMode(res);
+      this.handleGodMode(payload);
     } else {
       // 3.2. Find God badge
       this.state.targets = findTargets(map, MAP.GOD_BAGDE);
@@ -231,7 +213,7 @@ class GameClient {
       // 2. Check danger zone (bomb, hammer, wind)
       if (bombs.length > 0) {
       }
-      this.handleGodModeForChild(res);
+
       // 3. Using strategy to move
       if (!this.childState.player.isRunning) {
         console.log(
@@ -253,6 +235,7 @@ class GameClient {
           }
         }
       }
+      this.handleGodModeForChild(payload);
     }
   }
 
@@ -395,16 +378,61 @@ class GameClient {
     this.state.player.isMarried = true;
   }
 
-  _onBombSetup(res) {
-    const { map_info } = res;
-    const { bombs, map } = map_info;
+  _onBombSetup(payload) {
+    const { player, child, enemy, enemyChild, bombs, map } = payload;
 
     const currentPos = [
       this.state.player.position.x,
       this.state.player.position.y,
     ];
 
-    this.state.targets = findNearSafePosition(map, bombs, currentPos);
+    if (!bombs || bombs.length === 0) return;
+
+    const playerBombs = bombs.filter((bomb) => bomb.playerId === this.playerId);
+    const enemyBombs = bombs.filter((bomb) => bomb.playerId !== this.playerId);
+
+    const enemyCurrentPosition = enemy?.currentPosition;
+    const enemyChildCurrentPosition = enemyChild?.currentPosition;
+
+    const enemyDistance =
+      Math.abs(this.state.player.position.x - enemyCurrentPosition?.col) +
+      Math.abs(this.state.player.position.y - enemyCurrentPosition?.row);
+    const enemyChildDistance =
+      Math.abs(this.state.player.position.x - enemyChildCurrentPosition?.col) +
+      Math.abs(this.state.player.position.y - enemyChildCurrentPosition?.row);
+
+    const bombsToDodge =
+      enemyDistance < 3 || enemyChildDistance < 3
+        ? bombs // Dodge all bombs if enemy is close
+        : playerBombs; // Only dodge player's bombs if enemy is far
+    console.log(`distance:::::::::::::::::::::::::::::::::::::::::::::`,bombsToDodge);
+    // if (bombs)
+    //   if (distance < 3 && childDistanse < 3) {
+    //     if (child) {
+    //     }
+    //     this.state.targets = findNearSafePosition(map, bombs, currentPos);
+
+    //     let bestWay = findShortestPath(
+    //       map,
+    //       this.state.player.position,
+    //       this.state.targets,
+    //     );
+
+    //     console.log('Vị trí hiện tại:', this.state.player.position);
+    //     console.log('Vị trí an toàn:', this.state.targets);
+    //     console.log('Đường đi:', bestWay);
+
+    //     this._drivePlayer(bestWay);
+    //     this.setStatus(PLAYER_STATUS.RUN_AWAY);
+    //   }
+    if(bombsToDodge.length === 0) {
+      console.log(`khong co cai gi thi out thoi`);
+      return;
+    }
+    this.state.targets = findNearSafePosition(map, bombsToDodge, currentPos);
+
+    // If no safe targets found, return
+    if (!this.state.targets || this.state.targets.length === 0) return;
 
     let bestWay = findShortestPath(
       map,
@@ -412,12 +440,15 @@ class GameClient {
       this.state.targets,
     );
 
-    console.log('Vị trí hiện tại:', this.state.player.position);
-    console.log('Vị trí an toàn:', this.state.targets);
-    console.log('Đường đi:', bestWay);
+    // If a path is found, move the player
+    if (bestWay && bestWay.length > 0) {
+      console.log('Current position:', this.state.player.position);
+      console.log('Safe positions:', this.state.targets);
+      console.log('Path:', bestWay);
 
-    this._drivePlayer(bestWay);
-    this.setStatus(PLAYER_STATUS.RUN_AWAY);
+      this._drivePlayer(bestWay);
+      this.setStatus(PLAYER_STATUS.RUN_AWAY);
+    }
   }
 
   _onBombExploded(res) {
@@ -516,11 +547,10 @@ class GameClient {
     }
   }
 
-  handleGodMode(res) {
+  handleGodMode(payload) {
     console.log('God Mode');
 
-    const { map_info } = res;
-    const { map, players, bombs, spoils } = map_info;
+    const { map, players, bombs, spoils } = payload;
 
     // HANDLE FOLLOW STATUS
 
@@ -649,11 +679,10 @@ class GameClient {
     }
   }
   //Child Func Handler
-  handleGodModeForChild(res) {
+  handleGodModeForChild(payload) {
     console.log('Child: God Mode');
 
-    const { map_info } = res;
-    const { map, players, bombs, spoils } = map_info;
+    const { map, players, bombs, spoils } = payload;
 
     // HANDLE FOLLOW STATUS
 
@@ -945,7 +974,10 @@ class GameClient {
         analysisEnemy.tag = 'canStunEnemy';
       }
     }
-    console.log(":::::::::::::::::::::::::::::::::::::analysisEnemy: ", analysisEnemy);
+    console.log(
+      ':::::::::::::::::::::::::::::::::::::analysisEnemy: ',
+      analysisEnemy,
+    );
     this.handleWhenEnemyIsNearby(analysisEnemy);
     return;
   }
