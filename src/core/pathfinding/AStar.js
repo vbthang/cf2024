@@ -1,4 +1,4 @@
-const { MAP, DRIVE } = require('../../config/constants');
+const { MAP, DRIVE, CHARACTER } = require('../../config/constants');
 
 class Node {
   constructor(position, parent = null) {
@@ -55,6 +55,68 @@ function findPositionSetBomb(map, target, start, radius = 1) {
           map[y][x] === MAP.STONE_WALL
         ) {
           continue;
+        }
+
+        let affectedTargets = 0;
+        for (const [dir, [dx, dy]] of Object.entries(DIRECTIONS)) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (isValidPosition(map, [nx, ny]) && map[ny][nx] === target) {
+            affectedTargets++;
+          }
+        }
+
+        const distance = Math.abs(startX - x) + Math.abs(startY - y);
+        if (affectedTargets > 0) {
+          if (
+            affectedTargets > maxTargets ||
+            (affectedTargets === maxTargets && distance < minDistance)
+          ) {
+            maxTargets = affectedTargets;
+            minDistance = distance;
+            bestPosition = [x, y];
+          }
+        }
+      }
+    }
+
+    if (bestPosition) {
+      return bestPosition;
+    }
+
+    radius++;
+  }
+
+  return null;
+}
+
+function findPositionSetBombV2(map, target, start, bombs, comp, radius = 1) {
+  const { x: startX, y: startY } = start;
+
+  let bestPosition = null;
+  let maxTargets = 0;
+  let minDistance = Infinity;
+
+  // Fix: Magic number 20 ???
+  while (radius <= 20) {
+    console.log(radius);
+    for (let y = startY - radius; y <= startY + radius; y++) {
+      for (let x = startX - radius; x <= startX + radius; x++) {
+        if (
+          !isValidPosition(map, [x, y]) ||
+          map[y][x] === target ||
+          map[y][x] === MAP.BRICK_WALL ||
+          map[y][x] === MAP.STONE_WALL ||
+          checkBomb(x, y, bombs)
+        ) {
+          continue;
+        }
+
+        if (comp !== null) {
+          let [comX, comY] = comp;
+          if (Math.abs(comX - x) <= 3 && Math.abs(comY - y) <= 3) {
+            continue;
+          }
         }
 
         let affectedTargets = 0;
@@ -186,6 +248,13 @@ function findNearSafePosition(map, bombs, current) {
   }
 
   return [[startX, startY]];
+}
+
+function isSafePosition(map, bombs, [x, y]) {
+  if (map[y][x] === MAP.BALK) return false;
+  if (map[y][x] === MAP.BRICK_WALL) return false;
+  if (map[y][x] === MAP.STONE_WALL) return false;
+  if (checkBomb(x, y, bombs)) return false;
 }
 
 function manhattanDistance(pos1, pos2) {
@@ -359,7 +428,9 @@ function findShortestPath(map, start, targets) {
 module.exports = {
   findTargets,
   findPositionSetBomb,
+  findPositionSetBombV2,
   findShortestPath,
   findNearSafePosition,
   findPathToTarget,
+  checkBomb,
 };

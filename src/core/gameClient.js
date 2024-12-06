@@ -8,6 +8,7 @@ const {
   DRIVE,
   ITEM_SCORE,
   PLAYER_STATUS,
+  CHARACTER,
 } = require('../config/constants');
 const {
   findTargets,
@@ -15,6 +16,8 @@ const {
   findPositionSetBomb,
   findNearSafePosition,
   findPathToTarget,
+  checkBomb,
+  findPositionSetBombV2,
 } = require('./pathfinding/AStar');
 
 class GameClient {
@@ -151,7 +154,7 @@ class GameClient {
   _onGameStart(res) {}
 
   _onGameUpdate(payload) {
-    const { player,child, enemy, enemyChild, map, bombs } = payload;
+    const { player, child, enemy, enemyChild, map, bombs } = payload;
 
     this._updatePlayerState(player, 'parent');
     this.checkEnemyPositionAndHandle(enemy);
@@ -405,7 +408,10 @@ class GameClient {
       enemyDistance < 3 || enemyChildDistance < 3
         ? bombs // Dodge all bombs if enemy is close
         : playerBombs; // Only dodge player's bombs if enemy is far
-    console.log(`distance:::::::::::::::::::::::::::::::::::::::::::::`,bombsToDodge);
+    console.log(
+      `distance:::::::::::::::::::::::::::::::::::::::::::::`,
+      bombsToDodge,
+    );
     // if (bombs)
     //   if (distance < 3 && childDistanse < 3) {
     //     if (child) {
@@ -425,7 +431,7 @@ class GameClient {
     //     this._drivePlayer(bestWay);
     //     this.setStatus(PLAYER_STATUS.RUN_AWAY);
     //   }
-    if(bombsToDodge.length === 0) {
+    if (bombsToDodge.length === 0) {
       console.log(`khong co cai gi thi out thoi`);
       return;
     }
@@ -504,15 +510,15 @@ class GameClient {
       this.godType = player?.transformType;
       this.timeToUseSpecialWeapons = player?.timeToUseSpecialWeapons;
 
-      if (player?.eternalBadge && !this.state.player.isMarried) {
-        this.socket.emit(SOCKET_EVENT.ACTION, {
-          action: ACTION.MARRY_WIFE,
-        });
-      }
+      // if (player?.eternalBadge && !this.state.player.isMarried) {
+      //   this.socket.emit(SOCKET_EVENT.ACTION, {
+      //     action: ACTION.MARRY_WIFE,
+      //   });
+      // }
 
-      if (this.childState.player.position.x !== 0) {
-        this.state.player.isMarried = true;
-      }
+      // if (this.childState.player.position.x !== 0) {
+      //   this.state.player.isMarried = true;
+      // }
     } else {
       this.childState.player.position.x = player?.currentPosition.col;
       this.childState.player.position.y = player?.currentPosition.row;
@@ -550,7 +556,68 @@ class GameClient {
   handleGodMode(payload) {
     console.log('God Mode');
 
-    const { map, players, bombs, spoils } = payload;
+    const { map, enemy, bombs, spoils } = payload;
+
+    let totalBombs = [...bombs];
+
+    if (enemy.hasTransform) {
+      if (enemy.transformType === CHARACTER.SEA_GOD) {
+        let enemyPos = [enemy.currentPosition.col, enemy.currentPosition.row];
+        let mePos = [
+          this.state.player.position.x,
+          this.state.player.position.y,
+        ];
+
+        let distance =
+          Math.abs(enemyPos[0] - mePos[0]) + Math.abs(enemyPos[1] - mePos[1]);
+
+        if (distance <= 7) {
+          let liveBomb = [
+            {
+              row: enemyPos[1],
+              col: enemyPos[0],
+              power: 8,
+            },
+          ];
+
+          // Add 4 bombs around the enemy
+          liveBomb.push(
+            { row: enemyPos[1] - 1, col: enemyPos[0], power: 8 },
+            { row: enemyPos[1] + 1, col: enemyPos[0], power: 8 },
+            { row: enemyPos[1], col: enemyPos[0] - 1, power: 8 },
+            { row: enemyPos[1], col: enemyPos[0] + 1, power: 8 },
+          );
+
+          totalBombs.push(...liveBomb);
+
+          if (
+            checkBomb(
+              this.state.player.position.x,
+              this.state.player.position.y,
+              [...bombs, ...liveBomb],
+            )
+          ) {
+            this.state.targets = findNearSafePosition(
+              map,
+              [...bombs, ...liveBomb],
+              mePos,
+            );
+
+            let bestWay = findShortestPath(
+              map,
+              this.state.player.position,
+              this.state.targets,
+            );
+
+            if (bestWay) {
+              this._drivePlayer(bestWay);
+              this.setStatus(PLAYER_STATUS.DO_NOTHING);
+            }
+          }
+          // Tìm vị trí cách xa thần biển
+        }
+      }
+    }
 
     // HANDLE FOLLOW STATUS
 
@@ -564,10 +631,13 @@ class GameClient {
     switch (this.state.status) {
       case PLAYER_STATUS.DO_NOTHING:
         // Find pos to setup bomb
-        const bestPosToSetupBomb = findPositionSetBomb(
+
+        const bestPosToSetupBomb = findPositionSetBombV2(
           map,
           MAP.BALK,
           this.state.player.position,
+          bombs,
+          [enemy.currentPosition.col, enemy.currentPosition.row],
         );
 
         let currentPos = [
@@ -903,20 +973,21 @@ class GameClient {
 
   stunAndSetBom() {
     console.log('action: stun and set bom');
-    if (this.state.player.isSwapWeapon) {
+    // if (this.state.player.isSwapWeapon) {
+    //   this.socket.emit(SOCKET_EVENT.ACTION, {
+    //     action: ACTION.SWITCH_WEAPON,
+    //   });
+    // }
+    // this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
+    //   direction: DRIVE.USE_WEAPON,
+    // });
+    console.log('action: stunned');
+    if (!this.state.player.isSwapWeapon) {
       this.socket.emit(SOCKET_EVENT.ACTION, {
         action: ACTION.SWITCH_WEAPON,
       });
+      console.log('action: doi thanh vu khi bom');
     }
-    this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
-      direction: DRIVE.USE_WEAPON,
-    });
-    console.log('action: stunned');
-
-    this.socket.emit(SOCKET_EVENT.ACTION, {
-      action: ACTION.SWITCH_WEAPON,
-    });
-    console.log('action: doi thanh vu khi bom');
 
     this.socket.emit(SOCKET_EVENT.DRIVE_PLAYER, {
       direction: 'DRIVE.USE_WEAPON',
